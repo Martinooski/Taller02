@@ -121,44 +121,235 @@ public class Main {
 		} while (!op.equals("8"));
 	}
 
-	// se va a leer el archivo Registros.txt y cargar el usuario, medallas y equipo
 	public static void leerArchivo() {
-		// a
+		File archivo = new File("Registros.txt");
+		Scanner lector;
+		try {
+			lector = new Scanner(archivo);
+
+			if (!lector.hasNextLine()) {
+				usuario = null;
+				lector.close();
+				return;
+			}
+
+			String linea = lector.nextLine().trim();
+			String[] datos = linea.split(";");
+			usuario = datos[0];
+
+			if (datos.length > 1 && !datos[1].equals("none")) {
+				for (int i = 1; i < datos.length; i++) {
+					medallas.add(datos[i]);
+					for (int j = 0; j < lideres.size(); j++) {
+						if (lideres.get(j).getNombre().equals(datos[i])) {
+							lideres.get(j).setDerrotado(true);
+							break;
+						}
+					}
+				}
+			}
+
+			while (lector.hasNextLine()) {
+				linea = lector.nextLine().trim();
+				if (linea.isEmpty()) continue;
+				String[] datosPk = linea.split(";");
+				Pokemon aux = buscarPokemon(datosPk[0]);
+				if (aux != null) {
+					equipo.add(aux);
+					if (datosPk.length > 1 && datosPk[1].equals("Debilitado")) {
+						aux.setVivo(false);
+					} else {
+						aux.setVivo(true);
+					}
+				}
+			}
+			lector.close();
+
+		} catch (FileNotFoundException e) {
+			usuario = null;
+		}
 	}
 
-	// se va a guardar el progreso en Registros.txt
 	public static void guardar() {
-		// a
+		try (BufferedWriter escritor = new BufferedWriter(new FileWriter("Registros.txt"))) {
+			escritor.write(usuario);
+			if (medallas.isEmpty()) {
+				escritor.write(";none");
+			} else {
+				for (int k = 0; k < medallas.size(); k++) {
+					escritor.write(";" + medallas.get(k));
+				}
+			}
+
+			for (int k = 0; k < equipo.size(); k++) {
+				Pokemon pk = equipo.get(k);
+				escritor.newLine();
+				String estado = pk.getVivo() ? "Vivo" : "Debilitado";
+				escritor.write(pk.getNombre() + ";" + estado);
+			}
+
+		} catch (IOException e) {
+			System.out.println("Error al guardar la partida.");
+		}
 	}
 
-	// se va a mostrar el equipo actual del jugador
 	public static void revisarEquipo() {
-		// a
+		if (equipo.isEmpty()) {
+			System.out.println("No tienes pokemons en tu equipo.");
+			return;
+		}
+		System.out.println("\nEquipo Actual:");
+		for (int k = 0; k < equipo.size(); k++) {
+			Pokemon pk = equipo.get(k);
+			String estado = pk.getVivo() ? "Vivo" : "Debilitado";
+			String ubicacion = (k < 6) ? "(Equipo)" : "(PC)";
+			System.out.println((k + 1) + ") " + pk.getNombre() + "|" + pk.getTipo()
+					+ "|Stats totales: " + pk.getStats() + " [" + estado + "] " + ubicacion);
+		}
 	}
 
-	// se van a curar todos los pokemons del equipo
 	public static void curarPokemon() {
-		// a
+		if (equipo.isEmpty()) {
+			System.out.println("No tienes pokemons.");
+			return;
+		}
+		for (int k = 0; k < equipo.size(); k++) {
+			equipo.get(k).setVivo(true);
+		}
+		System.out.println("Tu equipo se ha recuperado!");
 	}
 
-	// se va a mostrar menu de zonas y permitir al jugador elegir donde capturar
 	public static void capturarPokemon() {
-		// a
+		ArrayList<Habitat> zonas = Habitat.getHabitats();
+		int totalZonas = zonas.size();
+
+		while (true) {
+			Menu.mostrarMenuZonas(zonas);
+			String op = teclado.nextLine().trim();
+			try {
+				int opcion = Integer.parseInt(op);
+				if (opcion >= 1 && opcion <= totalZonas) {
+					modoCaptura(zonas.get(opcion - 1));
+					return;
+				} else if (opcion == totalZonas + 1) {
+					return;
+				} else {
+					System.out.println("Opcion invalida");
+				}
+			} catch (NumberFormatException e) {
+				System.out.println("Por favor escriba un numero.");
+			}
+		}
 	}
 
-	// se va a generar un pokemon salvaje segun probabilidades de la zona
 	public static void modoCaptura(Habitat zona) {
-		// a
+		zona.agregarProbabilidades();
+		double valor = Math.random();
+		Pokemon salvaje = null;
+		ArrayList<Double> probs = zona.getProbabilidades();
+
+		for (int k = 0; k < probs.size(); k++) {
+			if (valor <= probs.get(k)) {
+				salvaje = zona.getPokemon(k);
+				break;
+			}
+		}
+
+		if (salvaje == null) {
+			salvaje = zona.getPokemon(probs.size() - 1);
+		}
+
+		Menu.mostrarMenuCaptura(salvaje.getNombre());
+		String op = "";
+
+		do {
+			op = teclado.nextLine().trim();
+
+			switch (op) {
+			case "1":
+				boolean repetido = false;
+				for (int k = 0; k < equipo.size(); k++) {
+					if (equipo.get(k).getNombre().equals(salvaje.getNombre())) {
+						repetido = true;
+						break;
+					}
+				}
+				if (repetido) {
+					System.out.println("Ya tienes ese pokemon, no puedes capturarlo de nuevo.");
+				} else {
+					equipo.add(salvaje);
+					salvaje.setVivo(true);
+					System.out.println(salvaje.getNombre() + " capturado con exito!!");
+					if (equipo.size() <= 6) {
+						System.out.println(salvaje.getNombre() + " ha sido agregado a tu equipo!");
+					} else {
+						System.out.println(salvaje.getNombre() + " ha sido enviado al PC.");
+					}
+				}
+				op = "2";
+				break;
+			case "2":
+				System.out.println("Huiste del combate.");
+				break;
+			default:
+				System.out.println("Opcion invalida");
+				System.out.print("Ingrese Opcion: ");
+				op = "";
+			}
+		} while (!op.equals("2"));
 	}
 
-	// se va a mostrar el PC con todos los pokemons
 	public static void accesoPC() {
-		// a
+		if (equipo.size() < 2) {
+			System.out.println("No hay pokemons suficientes para intercambiar.");
+			return;
+		}
+
+		String op = "";
+		do {
+			Menu.mostrarMenuPC(equipo);
+			op = teclado.nextLine().trim();
+
+			switch (op) {
+			case "1":
+				cambiarPokemon();
+				break;
+			case "2":
+				break;
+			default:
+				System.out.println("Opcion invalida");
+			}
+		} while (!op.equals("2"));
 	}
 
-	// se van a intercambiar dos pokemons de posicion en el equipo segun indice ingresado
 	public static void cambiarPokemon() {
-		// a
+		int idx1 = 0;
+		int idx2 = 0;
+
+		try {
+			System.out.print("¿Que pokemon desea cambiar? (numero de la lista): ");
+			idx1 = Integer.parseInt(teclado.nextLine().trim());
+			System.out.print("¿Por que pokemon lo desea cambiar? (numero de la lista): ");
+			idx2 = Integer.parseInt(teclado.nextLine().trim());
+		} catch (NumberFormatException e) {
+			System.out.println("Opcion invalida, ingrese un numero.");
+			return;
+		}
+
+		if (idx1 < 1 || idx1 > equipo.size() || idx2 < 1 || idx2 > equipo.size()) {
+			System.out.println("Numero fuera de rango.");
+			return;
+		}
+
+		if (idx1 == idx2) {
+			System.out.println("Son el mismo pokemon.");
+			return;
+		}
+
+		Pokemon aux = equipo.get(idx1 - 1);
+		equipo.set(idx1 - 1, equipo.get(idx2 - 1));
+		equipo.set(idx2 - 1, aux);
+		System.out.println("Pokemon intercambiados correctamente.");
 	}
 
 	// se va a mostrar menu de gimnasios y permitir retar a un lider
@@ -188,7 +379,7 @@ public class Main {
 
 	// se va a resolver un turno de batalla entre dos pokemons
 	public static void atacar(Pokemon rival, Pokemon mio) {
-		// TODO
+		// a
 	}
 
 	// se va a calcular el multiplicador de efectividad entre dos pokemons
@@ -208,25 +399,34 @@ public class Main {
 		// a
 	}
 
-	// se va a buscar un pokemon en la pokedex por nombre y retornarlo
 	public static Pokemon buscarPokemon(String nombre) {
-		// a
+		for (int k = 0; k < pokedex.size(); k++) {
+			if (pokedex.get(k).getNombre().equals(nombre)) {
+				return pokedex.get(k);
+			}
+		}
 		return null;
 	}
 
-	// se va a contar cuantos pokemons del equipo activo (primeros 6) estan debilitados
 	public static int contarDerrotadosEquipoActivo() {
-		// a
-		return 0;
+		int limite = Math.min(equipo.size(), 6);
+		int caidos = 0;
+		for (int k = 0; k < limite; k++) {
+			if (!equipo.get(k).getVivo()) {
+				caidos++;
+			}
+		}
+		return caidos;
 	}
 
-	// se va a revisar si hay al menos un pokemon vivo en los primeros 6 del equipo
 	public static boolean hayPokemonVivoEnEquipo() {
-		// a
+		int limite = Math.min(equipo.size(), 6);
+		for (int k = 0; k < limite; k++) {
+			if (equipo.get(k).getVivo()) return true;
+		}
 		return false;
 	}
 
-	// se va a leer el txt y cargar todos los pokemons en el ArrayList pokedex
 	public static void cargarPokedex() {
 		File archivo = new File("Pokedex.txt");
 		Scanner lector;
@@ -264,7 +464,6 @@ public class Main {
 		}
 	}
 
-	// se va a leer el txt y cargar los lideres con sus pokemons
 	public static void cargarLideres() {
 		File archivo = new File("Gimnasios.txt");
 		Scanner lector;
@@ -294,7 +493,6 @@ public class Main {
 		}
 	}
 
-	// se va a leer el txt y cargar los miembros con sus pokemons
 	public static void cargarAltoMando() {
 		File archivo = new File("Alto Mando.txt");
 		Scanner lector;
